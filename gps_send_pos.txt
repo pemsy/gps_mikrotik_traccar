@@ -1,7 +1,119 @@
-:global id "123456"
-:global lon "21"
-:global lat "50"
-:global alt "300"
-:local str "http://tracking.pemsy.com:5055/?id=$id&lat=$lat&lon=$lon&hdop=10&altitude=$alt&speed=99"
-/tool fetch url=$str keep-result=no
+/system gps monitor file=gps
+:local email "mail@mail.com";
+:put "start script";
+:global gpstext [/file get gps.txt contents];
+:local longstart [:find $gpstext "longitude" -1];
+:local longend [:find $gpstext "\n" $longstart];
+:local latstart [:find $gpstext "latitude" -1];
+:local latend [:find $gpstext "\n" $latstart];
+:local validstart [:find $gpstext "valid" -1];
+:local validend [:find $gpstext "\n" $validstart];
+:local valid true;
+:local zeros "";
 
+:put "start logic";
+
+:if ([:find $gpstext "yes" $validstart] > 0) do={:set valid true;};
+
+:global longitude [:pick $gpstext ($longstart + 11) $longend];
+:local degreestart [:find $longitude " " -1];
+:local minutestart [:find $longitude " " $degreestart];
+:local secondstart [:find $longitude "'" $minutestart];
+
+:local secondend;
+:local secfract;
+
+:if ([:len [:find $longitude "." 0]] < 1) do={
+    :set secondend [:find $longitude "'" $secondstart];
+    :set secfract "0";
+	} else={
+    :set secondend [:find $longitude "." $secondstart];
+    :set secfract [:pick $longitude ($secondend + 1) ($secondend + 2)];
+	};
+
+:local longdegree;
+:local longdegreelink;
+
+:if ([:pick $longitude 0 1] = "W") do={
+    :set longdegree "-";
+    :set longdegreelink "W";
+	} else={
+    :set longdegree "+";
+    :set longdegreelink "E";
+	};
+
+:set longdegree ($longdegree . [:pick $longitude 2 $minutestart]);
+:set longdegreelink ($longdegreelink . [:pick $longitude 2 $minutestart]);
+:local longmin [:pick $longitude ($minutestart + 1) $secondstart];
+:local longsec [:pick $longitude ($secondstart + 2) $secondend];
+:local longfract ((([:tonum $longmin] * 6000) + ([:tonum $longsec] * 100) + ([:tonum $secfract] * 10) ) / 36);
+
+:while (([:len $zeros] + [:len $longfract]) < 4) do={
+    :set zeros ($zeros . "0");
+};
+
+:put $longitude;
+:global newlong ($longdegree . "." . $zeros . $longfract);
+:global newlonglink ($longdegreelink . "." . $zeros . $longfract);
+
+:global latitude [:pick $gpstext (latstart + 10) $latend];
+:set degreestart [:find $latitude " " -1];
+:set minutestart [:find $latitude " " $degreestart];
+:set secondstart [:find $latitude "'" $minutestart];
+
+:if ([:len [:find $latitude "." 0]] < 1) do={
+    :set secondend [:find $latitude "'" $secondstart];
+    :set secfract "0";
+	} else={
+    :set secondend [:find $latitude "." $secondstart];
+    :set secfract [:pick $latitude ($secondend + 1) ($secondend +2)];
+	};
+
+:local latdegree;
+:local latdegreelink;
+
+:if ([:pick $latitude 0 1] = "N") do={
+    :set latdegree "+";
+    :set latdegreelink "N";
+	} else={
+    :set latdegree "-";
+    :set latdegreelink "S";
+	};
+
+:set latdegree ($latdegree . [:pick $latitude 2 $minutestart]);
+:set latdegreelink ($latdegreelink . [:pick $latitude 2 $minutestart]);
+:local latmin [:pick $latitude ($minutestart + 1) $secondstart];
+:local latsec [:pick $latitude ($secondstart + 2) $secondend];
+:local latfract ((([:tonum $latmin] * 6000) + ([:tonum $latsec] * 100) +([:tonum $secfract] * 10)) / 36);
+
+:set zeros "";
+
+:while (([:len $zeros] + [:len $latfract]) < 4) do={
+    :set zeros ($zeros . "0");
+	};
+
+:global newlat ($latdegree . "." . $zeros . $latfract);
+:global newlatlink ($latdegreelink . "." . $zeros . $latfract);
+
+:global coordinates ($newlong . "," . $newlat);
+:put "test";
+
+:if (valid) do={
+    :global oldpos;
+	:put "vaild position";
+	:put $oldpos;
+	:put $coordinates;
+	:if ($oldpos != $coordinates) do={
+		:put "Rozne pozycje";
+		:local str "http://traccar.com:5055/?id=mikrotik&lat=$newlat&lon=$newlong&hdop=10";
+		/tool fetch url=$str keep-result=no;
+		:set oldpos $coordinates;
+		:put "Router gps position invaild3";
+		};
+	} else={
+         /tool e-mail
+         send to=$email subject="Router gps position invalid" body="Router gps position invalid"
+		:put "Router gps position invaild";
+	};
+
+:put "THE END";
