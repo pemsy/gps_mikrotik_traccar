@@ -1,0 +1,7 @@
+:global id "123456"
+:global lon "21"
+:global lat "50"
+:global alt "300"
+:local str "http://tracking.pemsy.com:5055/?id=$id&lat=$lat&lon=$lon&hdop=10&altitude=$alt&speed=99"
+/tool fetch url=$str keep-result=no
+
